@@ -1,0 +1,16 @@
+{
+  "name": "ghl-order-check-api",
+  "version": "1.0.0",
+  "description": "API to check if ordered items exist in GoHighLevel menu",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "axios": "^1.8.4",
+    "express": "^4.21.2"
+  },
+  "engines": {
+    "node": ">=14"
+  }
+}
