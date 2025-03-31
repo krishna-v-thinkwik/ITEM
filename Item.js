@@ -1,5 +1,6 @@
 const express = require("express");
 const axios = require("axios");
+const stringSimilarity = require("string-similarity");
 const app = express();
 const port = process.env.PORT || 5000; // Use Render's port
 
@@ -20,7 +21,8 @@ async function fetchGhlMenu() {
   try {
     const response = await axios.get(GHL_API_URL, { headers: HEADERS });
     const data = response.data;
-    return new Set(data.products.map((item) => item.name.toLowerCase()));
+    const menuSet = new Set(data.products.map((item) => item.name.toLowerCase()));
+    return { menuSet, products: data.products.map((item) => item.name.toLowerCase()) };
   } catch (error) {
     return { error: `Error fetching GHL menu: ${error.message}` };
   }
@@ -31,22 +33,46 @@ function extractItemsFromOrder(orderString) {
   return new Set(cleanedOrder.split(/\band\b|\+|,/).map((item) => item.trim()));
 }
 
+function suggestSimilarItems(item, menuItems) {
+  const matches = stringSimilarity.findBestMatch(item, menuItems);
+  return matches.ratings
+    .filter((match) => match.rating > 0.3) // Adjust threshold as needed
+    .map((match) => match.target);
+}
+
+function getCategorySuggestions(item, menuItems) {
+  const category = item.split(" ").pop(); // Extract last word like "pakora", "naan"
+  return menuItems.filter(menuItem => menuItem.includes(category));
+}
+
 app.post("/check_order", async (req, res) => {
   const { order_string } = req.body;
   if (!order_string) {
     return res.status(400).json({ error: "Missing order_string in request body" });
   }
 
-  const ghlMenu = await fetchGhlMenu();
-  if (ghlMenu.error) {
-    return res.status(500).json(ghlMenu);
+  const { menuSet, products } = await fetchGhlMenu();
+  if (!menuSet) {
+    return res.status(500).json({ error: "Failed to fetch menu" });
   }
 
   const orderItems = extractItemsFromOrder(order_string);
-  const missingItems = [...orderItems].filter((item) => !ghlMenu.has(item));
+  const missingItems = [...orderItems].filter((item) => !menuSet.has(item));
 
   if (missingItems.length > 0) {
-    return res.status(400).json({ message: `${missingItems.join(", ")} is not in our menu` });
+    const suggestions = missingItems.map((item) => {
+      return {
+        item,
+        suggestions: getCategorySuggestions(item, products).length > 0 
+          ? getCategorySuggestions(item, products) 
+          : suggestSimilarItems(item, products),
+      };
+    });
+    
+    return res.status(400).json({
+      message: `${missingItems.join(", ")} is not in our menu`,
+      suggestions,
+    });
   } else {
     return res.json({ status: "success", message: "All items are available" });
   }
