@@ -61,18 +61,14 @@ app.post("/check_order", async (req, res) => {
 
   if (missingItems.length > 0) {
     const suggestions = missingItems.map((item) => {
-      return {
-        item,
-        suggestions: getCategorySuggestions(item, products).length > 0 
-          ? getCategorySuggestions(item, products) 
-          : suggestSimilarItems(item, products),
-      };
+      const suggestedItems = getCategorySuggestions(item, products).length > 0 
+        ? getCategorySuggestions(item, products) 
+        : suggestSimilarItems(item, products);
+      
+      return `Sorry, ${item} is not in our menu! ${suggestedItems.length > 0 ? `We have ${suggestedItems.join(", ")}. Would you like to order it?` : ""}`;
     });
-    
-    return res.status(400).json({
-      message: `${missingItems.join(", ")} is not in our menu`,
-      suggestions,
-    });
+
+    return res.status(400).json({ message: suggestions.join(" ") });
   } else {
     return res.json({ status: "success", message: "All items are available" });
   }
