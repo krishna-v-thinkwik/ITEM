@@ -2,11 +2,11 @@ const express = require("express");
 const axios = require("axios");
 const stringSimilarity = require("string-similarity");
 const app = express();
-const port = process.env.PORT || 5000; // Use Render's port
+const port = process.env.PORT || 5000;
 
 app.use(express.json());
 
-// Replace with your actual API key and location ID (Store in environment variables on Render)
+// Replace with environment variables in production
 const GHL_API_KEY = "pit-a183822b-0996-4d1a-b3a8-5dbb184f6c3b";
 const LOCATION_ID = "f4J9w7Xpu7w4PftyYw2j";
 const GHL_API_URL = `https://services.leadconnectorhq.com/products/?locationId=${LOCATION_ID}`;
@@ -17,6 +17,7 @@ const HEADERS = {
   Accept: "application/json",
 };
 
+// Fetch menu from GoHighLevel
 async function fetchGhlMenu() {
   try {
     const response = await axios.get(GHL_API_URL, { headers: HEADERS });
@@ -28,22 +29,13 @@ async function fetchGhlMenu() {
   }
 }
 
+// Extract ordered items
 function extractItemsFromOrder(orderString) {
   const cleanedOrder = orderString.replace(/\d+/g, "").toLowerCase();
   return new Set(cleanedOrder.split(/\band\b|\+|,/).map((item) => item.trim()));
 }
 
-function suggestSimilarItems(item, menuItems) {
-  const matches = stringSimilarity.findBestMatch(item, menuItems);
-  return matches.ratings
-    .filter((match) => match.rating > 0.3) // Adjust threshold as needed
-    .map((match) => match.target);
-}
-
-function getCategorySuggestions(item, menuItems) {
-  const category = item.split(" ").pop(); // Extract last word like "pakora", "naan"
-  return menuItems.filter(menuItem => menuItem.includes(category));
-}
+const normalize = (text) => text.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
 
 app.post("/check_order", async (req, res) => {
   const { order_string } = req.body;
@@ -51,28 +43,37 @@ app.post("/check_order", async (req, res) => {
     return res.status(400).json({ error: "Missing order_string in request body" });
   }
 
-  const { menuSet, products } = await fetchGhlMenu();
-  if (!menuSet) {
-    return res.status(500).json({ error: "Failed to fetch menu" });
+  const { products, error } = await fetchGhlMenu();
+  if (error) {
+    return res.status(500).json({ error });
   }
 
+  const normalizedMenu = products.map(normalize);
   const orderItems = extractItemsFromOrder(order_string);
-  const missingItems = [...orderItems].filter((item) => !menuSet.has(item));
+  const matchedItems = [];
 
-  if (missingItems.length > 0) {
-    const suggestions = missingItems.map((item) => {
-      const suggestedItems = getCategorySuggestions(item, products).length > 0 
-        ? getCategorySuggestions(item, products) 
-        : suggestSimilarItems(item, products);
-      
-      return `Sorry, ${item} is not in our menu! ${suggestedItems.length > 0 ? `We have ${suggestedItems.join(", ")}. Would you like to order it?` : ""}`;
-    });
+  orderItems.forEach((item) => {
+    const normalizedItem = normalize(item);
 
-    return res.status(400).json({ message: suggestions.join(" ") });
-  } else {
-    return res.json({ status: "success", message: "All items are available" });
-  }
+    // Fuzzy match
+    const match = stringSimilarity.findBestMatch(normalizedItem, normalizedMenu).bestMatch;
+    const originalMenuItem = products[normalizedMenu.indexOf(match.target)];
+
+    if (match.rating > 0.5) {
+      matchedItems.push(originalMenuItem); // Automatically accept match if similarity > 50%
+    }
+    // If rating is low, we just ignore — no need to mention it
+  });
+
+  return res.json({
+    status: "success",
+    message: "Available items matched from the menu:",
+    matchedItems,
+  });
 });
+
+
+  
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
