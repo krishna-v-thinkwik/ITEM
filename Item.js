@@ -45,15 +45,19 @@ function levenshtein(a, b) {
 }
 
 function normalize(str) {
-    return str.toLowerCase().replace(/[^a-z\s]/g, "").trim();
-  }
-  
+  return str
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, "")
+    .trim()
+    .replace(/\b(\w+)s\b/g, "$1"); // remove plural 's' at the end of words
+}
+
 
 function extractItemsFromOrder(orderString) {
   const cleanedOrder = orderString.toLowerCase().replace(/\d+/g, "");
   return cleanedOrder
     .split(/and|,|\+|&/i)
-    .map((item) => item.trim())
+    .map((item) => item.trim().replace(/\b(\w+)s\b/g, "$1")) // remove plural 's'
     .filter(Boolean);
 }
 
@@ -117,7 +121,6 @@ function getSuggestions(input, list) {
       .slice(0, 3);
   }
   
-
   app.post("/check_order", async (req, res) => {
     const { order_string } = req.body;
     if (!order_string) {
