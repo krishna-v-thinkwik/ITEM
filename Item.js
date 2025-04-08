@@ -118,42 +118,49 @@ function getSuggestions(input, list) {
   }
   
 
-// Route
-app.post("/check_order", async (req, res) => {
-  const { order_string } = req.body;
-  if (!order_string) {
-    return res
-      .status(400)
-      .json({ error: "Missing order_string in request body" });
-  }
-
-  const { products, error } = await fetchGhlMenu();
-  if (error) return res.status(500).json({ error });
-
-  const orderItems = extractItemsFromOrder(order_string);
-  const results = [];
-
-  orderItems.forEach((item) => {
-    const { match, available } = getBestMatch(item, products);
-    if (available) {
-      results.push({ input: item, matchedItem: match, available: true });
-    } else {
-      results.push({
-        input: item,
-        matchedItem: null,
-        available: false,
-        suggestions: getSuggestions(item, products),
-      });
+  app.post("/check_order", async (req, res) => {
+    const { order_string } = req.body;
+    if (!order_string) {
+      return res.status(400).send("❌ Missing order_string in request body.");
     }
+  
+    const { products, error } = await fetchGhlMenu();
+    if (error) return res.status(500).send(`❌ ${error}`);
+  
+    const orderItems = extractItemsFromOrder(order_string);
+    let unavailableItems = [];
+    let responseText = "";
+  
+    orderItems.forEach((item) => {
+      const { match, available } = getBestMatch(item, products);
+      if (available) {
+        // Valid item - do nothing for now
+      } else {
+        const suggestions = getSuggestions(item, products);
+        const suggestion = suggestions.length > 0 ? suggestions[0] : null;
+        unavailableItems.push({
+          input: item,
+          suggestion,
+        });
+      }
+    });
+  
+    if (unavailableItems.length === 0) {
+      responseText = "✅ We have all items available in our menu.";
+    } else {
+      const lines = unavailableItems.map((item) => {
+        if (item.suggestion) {
+          return `❌ Sorry, we do not have "${item.input}" available. Instead, we have "${item.suggestion}". Would you like to try that?`;
+        } else {
+          return `❌ Sorry, we do not have "${item.input}" available, and no similar item was found.`;
+        }
+      });
+      responseText = lines.join("\n");
+    }
+  
+    return res.send(responseText);
   });
-
-  return res.json({
-    status: "success",
-    message: "Checked order items",
-    results,
-  });
-});
-
+  
 // Start server
 app.listen(port, () => {
   console.log(`✅ Server running on port ${port}`);
