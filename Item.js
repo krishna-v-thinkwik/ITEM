@@ -8,7 +8,8 @@ app.use(express.json());
 // Replace with environment variables in production
 const GHL_API_KEY = "pit-a183822b-0996-4d1a-b3a8-5dbb184f6c3b";
 const LOCATION_ID = "f4J9w7Xpu7w4PftyYw2j";
-const GHL_API_URL = `https://services.leadconnectorhq.com/products/?locationId=${LOCATION_ID}`;
+const GHL_API_URL = `https://services.leadconnectorhq.com/products/?locationId=${LOCATION_ID}&limit=300&offset=0`;
+
 
 const HEADERS = {
   Authorization: `Bearer ${GHL_API_KEY}`,
@@ -16,6 +17,7 @@ const HEADERS = {
   Accept: "application/json",
 };
 
+// Fetch menu from GoHighLevel
 // Fetch menu from GoHighLevel
 async function fetchGhlMenu() {
   try {
